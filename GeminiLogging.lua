@@ -5,10 +5,18 @@
 -- Logging library (loosely) based on LuaLogging.
 -- Comes with appenders for GeminiConsole and Print() Debug Channel.
 -------------------------------------------------------------------------------
+local MAJOR,MINOR = "Gemini:Logging-1.2", 2
+-- Get a reference to the package information if any
+local APkg = Apollo.GetPackage(MAJOR)
+-- If there was an older version loaded we need to see if this is newer
+if APkg and (APkg.nVersion or 0) >= MINOR then
+	return -- no upgrade needed
+end
+-- Set a reference to the actual package or create an empty table
+local GeminiLogging = APkg and APkg.tPackage or {}
 
+local strformat = string.format
 local inspect
-
-local GeminiLogging = {}
 
 function GeminiLogging:OnLoad()
 	
@@ -16,21 +24,17 @@ function GeminiLogging:OnLoad()
 	self.console = Apollo.GetAddon("GeminiConsole")
 	
 	-- The GeminiLogging.DEBUG Level designates fine-grained informational events that are most useful to debug an application
-	self.DEBUG = "DEBUG"
 	-- The GeminiLogging.INFO level designates informational messages that highlight the progress of the application at coarse-grained level
-	self.INFO = "INFO"
-	-- The WARN level designates potentially harmful situations
-	self.WARN = "WARN"
-	-- The ERROR level designates error events that might still allow the application to continue running
-	self.ERROR = "ERROR"
-	-- The FATAL level designates very severe error events that will presumably lead the application to abort
-	self.FATAL = "FATAL"
+	-- The GeminiLogging.WARN level designates potentially harmful situations
+	-- The GeminiLogging.ERROR level designates error events that might still allow the application to continue running
+	-- The GeminiLogging.FATAL level designates very severe error events that will presumably lead the application to abort
 
 	-- Data structures for levels
 	self.LEVEL = {"DEBUG", "INFO", "WARN", "ERROR", "FATAL"}
 	self.MAX_LEVELS = #self.LEVEL
-	-- Enumerate levels
+	-- Enumerate levels and build Lookups
 	for i=1,self.MAX_LEVELS do
+		self[self.LEVEL[i]] = self.LEVEL[i]
 		self.LEVEL[self.LEVEL[i]] = i
 	end
 
@@ -58,7 +62,7 @@ function GeminiLogging:GetLogger(opt)
 	local logger = {}
 	
 	-- Set appender
-	if type(opt.appender) == "string" then
+	if not opt.appender or type(opt.appender) == "string" then
 		logger.append = self:GetAppender(opt.appender)
 		if not logger.append then
 			Print("Invalid appender")
@@ -75,26 +79,35 @@ function GeminiLogging:GetLogger(opt)
 	logger.pattern = opt.pattern
 	
 	-- Set level
-	logger.level = opt.level
+	logger.level = self.LEVEL[opt.level]
 	local order = self.LEVEL[logger.level]
 	
 	-- Set logger functions (debug, info, etc.) based on level option
 	for i=1,self.MAX_LEVELS do
+		local currentLevel = i
 		local upperName = self.LEVEL[i]
 		local name = upperName:lower()
-		if i >= order then
-			logger[name] = function(self, message, opt)
-				local debugInfo = debug.getinfo(2)		-- Get debug info for caller of log function
-				--Print(inspect(debug.getinfo(3)))
-				--local caller = debugInfo.name or ""
-				local dir, file, ext = string.match(debugInfo.short_src, "(.-)([^\\]-([^%.]+))$")
-				local caller = file or ""
-				caller = string.gsub(caller, "." .. ext, "")
-				local line = debugInfo.currentline or "-"
-				logger:append(GeminiLogging.PrepareLogMessage(logger, message, upperName, caller, line))		-- Give the appender the level string
-			end
+		logger[name] = function(self, fmt, ...)
+			-- Only output if the level is correct.
+			if logger.level > currentLevel then return end
+			local debugInfo = debug.getinfo(2)		-- Get debug info for caller of log function
+			--Print(inspect(debug.getinfo(3)))
+			--local caller = debugInfo.name or ""
+			local dir, file, ext = string.match(debugInfo.short_src, "(.-)([^\\]-([^%.]+))$")
+			local caller = file or ""
+			local message = type(fmt) == "string" and strformat(fmt, ...) or fmt
+			caller = string.gsub(caller, "." .. ext, "")
+			local line = debugInfo.currentline or "-"
+			logger:append(GeminiLogging.PrepareLogMessage(logger, message, upperName, caller, line))		-- Give the appender the level string
+		end
+	end
+
+	logger.SetLevel = function(self, level)
+		local newLevel = GeminiLogging.LEVEL[level]
+		if newLevel then
+			logger.level = newLevel
 		else
-			logger[name] = function() end			-- noop if level is too high
+			Print("Invalid Logging Level: " .. level)
 		end
 	end
 
@@ -134,7 +147,6 @@ end
 	FATAL = "FFFF4D4D"
 }--]]
 function GeminiLogging:GetAppender(name)
-	if nTimeStart == nil then nTimeStart = os.time() end
 	if name == "GeminiConsole" then
 		return function(self, message, level)
 			if GeminiLogging.console ~= nil then
@@ -151,5 +163,4 @@ function GeminiLogging:GetAppender(name)
 	return nil
 end
 
-Apollo.RegisterPackage(GeminiLogging, "Gemini:Logging-1.2", 1, {"Drafto:Lib:inspect-1.2", "GeminiConsole"})
-	
+Apollo.RegisterPackage(GeminiLogging, MAJOR, MINOR, {"Drafto:Lib:inspect-1.2", "GeminiConsole"})
