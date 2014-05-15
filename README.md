@@ -42,7 +42,7 @@ All loggers accept either a table that will be outputted or a string.format stri
 The following levels are available:
 
 | Level | Description |
-|:_______:|:______________________________________________________________________________ |
+|:---------:|:------------------------------------------------------------------------------ |
 | **DEBUG** | Fine-grained informational events that are most useful to debug an application |
 | **INFO**  | Informational messages that highlight the progress of the application at coarse-grained level |
 | **WARN**  | Potentially harmful situations |
