@@ -35,7 +35,7 @@ All loggers accept either a table that will be outputted or a string.format stri
 * fatal - Generates a FATAL level message
 
 * SetLevel - Can be used to dynamically change the log display level. Example:
-	* ```lua glog:SetLevel("WARN") ```
+	* `lua glog:SetLevel("WARN")`
 
 ###Logging Levels:
 
@@ -55,7 +55,7 @@ The following levels are available:
 local glog
 
 function MyAddon:OnLoad()
-	local tGeminiLogging = Apollo.GetPackage("Gemini:Logging-1.2").tPackage
+	local GeminiLogging = Apollo.GetPackage("Gemini:Logging-1.2").tPackage
 	glog = GeminiLogging:GetLogger({
         level = GeminiLogging.FATAL,
         pattern = "%d %n %c %l - %m",
@@ -64,8 +64,11 @@ function MyAddon:OnLoad()
 end
 
 function MyAddon:DoFoo(strBaz, nBar, tBat)
-	glog:debug("Baz: %s; Bar: %d", strBaz, nBar)
-	glog:info(tBat)
+	glog:debug("Baz: %s; Bar: %d", strBaz, nBar)  -- Not shown due to logging level
+	glog:info(tBat)                               -- Not shown due to logging level
+
+	glog:fatal("You'll see this one! Baz: %s", strBaz)
+	glog:fatal(tBat)
 	...
 end
 ```
