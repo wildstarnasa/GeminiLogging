@@ -5,7 +5,10 @@
 -- Logging library (loosely) based on LuaLogging.
 -- Comes with appenders for GeminiConsole and Print() Debug Channel.
 -------------------------------------------------------------------------------
-local MAJOR,MINOR = "Gemini:Logging-1.2", 3
+
+require "GameLib"
+
+local MAJOR,MINOR = "Gemini:Logging-1.2", 4
 -- Get a reference to the package information if any
 local APkg = Apollo.GetPackage(MAJOR)
 -- If there was an older version loaded we need to see if this is newer
@@ -350,6 +353,8 @@ function GeminiLogging:OnLoad()
 		self[self.LEVEL[i]] = self.LEVEL[i]
 		self.LEVEL[self.LEVEL[i]] = i
 	end
+	
+	self.buffering = true
 
 end
 
@@ -357,6 +362,10 @@ function GeminiLogging:OnDependencyError(strDep, strError)
 	if strDep == "GeminiConsole" then return true end
 	Print("GeminiLogging couldn't load " .. strDep .. ". Fatal error: " .. strError)
 	return false
+end
+
+function GeminiLogging:FlushBuffer()
+	self.buffering = false
 end
 
 -- Factory method for loggers
@@ -376,6 +385,10 @@ function GeminiLogging:GetLogger(optSettings)
 
 	-- Initialize logger object
 	local logger = {}
+	if self.buffering then 
+		logger.buffer = {}
+	end
+	Apollo.RegisterEventHandler("InterfaceMenuListHasLoaded", "OnGameLoaded", logger)
 	
 	-- Set appender
 	if not opt.appender or type(opt.appender) == "string" then
@@ -414,7 +427,13 @@ function GeminiLogging:GetLogger(optSettings)
 			local message = type(fmt) == "string" and strformat(fmt, ...) or fmt
 			caller = string.gsub(caller, "." .. ext, "")
 			local line = debugInfo.currentline or "-"
-			logger:append(GeminiLogging.PrepareLogMessage(logger, message, upperName, caller, line))		-- Give the appender the level string
+			local logMessage = GeminiLogging.PrepareLogMessage(logger, message, upperName, caller, line)
+			if GeminiLogging.buffering then
+				table.insert(self.buffer, logMessage)
+			else 
+				logger.FlushBuffer()
+				logger:append(logMessage)
+			end
 		end
 	end
 
@@ -425,6 +444,20 @@ function GeminiLogging:GetLogger(optSettings)
 		else
 			Print("Invalid Logging Level: " .. level)
 		end
+	end
+	
+	logger.FlushBuffer = function(self)
+		if logger.buffer ~= nil then
+			for _, v in ipairs(logger.buffer) do
+				logger:append(v)
+			end
+			logger.buffer = nil
+		end
+		GeminiLogging:FlushBuffer()
+	end
+	
+	logger.OnGameLoaded = function(self)
+		self.FlushBuffer()
 	end
 
 	return logger
@@ -443,6 +476,7 @@ function GeminiLogging:PrepareLogMessage(message, level, caller, line)
 	local logMsg = self.pattern
 	message = string.gsub(message, "%%", "%%%%")
 	logMsg = string.gsub(logMsg, "%%d", os.date("%I:%M:%S%p"))		-- only time, in 12-hour AM/PM format. This could be configurable...
+	logMsg = string.gsub(logMsg, "%%D", os.date("%H:%M:%S"))		-- only time, in 12-hour AM/PM format. This could be configurable...
 	logMsg = string.gsub(logMsg, "%%l", level)
 	logMsg = string.gsub(logMsg, "%%c", caller)
 	logMsg = string.gsub(logMsg, "%%n", line)
